@@ -1,0 +1,44 @@
+name:                univalency
+version:             0.1.0
+synopsis:            a game about squares, types, and genesis
+-- description:
+homepage:            https://www.github.com/AugmentedFifth/univalency#readme
+license:             AGPL-3
+license-file:        LICENSE
+author:              Zachary Comito
+maintainer:          zcomito@gmail.com
+copyright:           2017 Zachary Comito
+category:            Web
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Univalency
+  build-depends:       base >= 4.7 && < 5
+                     , helm
+                     , linear
+  default-language:    Haskell2010
+
+executable univalency-exe
+  hs-source-dirs:      app
+  main-is:             Main.hs
+  ghc-options:         -fprint-unicode-syntax -Wall -O2 -threaded -rtsopts -with-rtsopts=-N
+  build-depends:       base
+                     , univalency
+                     , helm
+  default-language:    Haskell2010
+
+test-suite univalency-test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             Spec.hs
+  build-depends:       base
+                     , univalency
+  ghc-options:         -fprint-unicode-syntax -Wall -O2 -threaded -rtsopts -with-rtsopts=-N
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://www.github.com/AugmentedFifth/univalency
