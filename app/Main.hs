@@ -8,9 +8,11 @@ import qualified Helm.Engine.SDL as SDL
 
 main :: IO ()
 main = do
-    engine <- SDL.startupWith $ SDL.defaultConfig
-        { SDL.windowIsResizable = False
-        , SDL.windowDimensions  = windowDims
+    engine <- SDL.startupWith SDL.SDLEngineConfig
+        { SDL.windowDimensions   = windowDims
+        , SDL.windowIsFullscreen = False
+        , SDL.windowIsResizable  = False
+        , SDL.windowTitle        = "univalency"
         }
 
     run engine GameConfig

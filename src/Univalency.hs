@@ -65,8 +65,8 @@ direction Keyboard.DKey = V2 1 0
 direction Keyboard.SKey = V2 0 1
 direction Keyboard.WKey = V2 0 (-1)
 direction _             = error $ "Using a key that isn't "
-                                ++ show movementKeys
-                                ++ " to move"
+                               ++ show movementKeys
+                               ++ " to move"
 
 squareColor :: Color
 squareColor = rgb 0.5 0 0.05
@@ -135,9 +135,9 @@ update model@Model{..} (Animate dt) =
         , debug = "pos: "
                ++ showV2 4 (round <$> newPos :: V2 Int)
                ++ "  ||  vel: "
-               ++ showV2 5 ((round.(10000*)) <$> newVel :: V2 Int)
+               ++ showV2 5 ((round.(10000 *)) <$> newVel :: V2 Int)
                ++ "  ||  acc: "
-               ++ showV2 3 ((round.(10000*)) <$> newAcc :: V2 Int)
+               ++ showV2 3 ((round.(10000 *)) <$> newAcc :: V2 Int)
         }
     , Cmd.none
     )
@@ -188,11 +188,7 @@ update model@Model{..} (StartMove key) =
             _           -> Moving [key]
 
 update model@Model{..} (StopMove key) =
-    ( model
-        { playerStatus = newStatus
-        }
-    , Cmd.none
-    )
+    (model { playerStatus = newStatus }, Cmd.none)
     where
         newStatus = case playerStatus of
             Moving keys -> if length keys < 2 then
@@ -207,18 +203,18 @@ subscriptions :: Sub SDLEngine Action
 subscriptions = Sub.batch
     [ Time.fps 60 Animate
     , Keyboard.downs $
-        \key -> if key `elem` movementKeys then StartMove key else DoNothing
+          \key -> if key `elem` movementKeys then StartMove key else DoNothing
     , Keyboard.ups $
-        \key -> if key `elem` movementKeys then StopMove key else DoNothing
+          \key -> if key `elem` movementKeys then StopMove key else DoNothing
     ]
 
 view :: Model -> Graphics SDLEngine
 view Model{..} = Graphics2D
     $ collage
-        [ toForm $ center (V2 xcenter 20)
+        [ toForm $ center (V2 xCenter 20)
                  $ collage [text $ toText debug]
         , toForm $ center windowCenter
                  $ collage [setPos playerPos squareForm]
         ]
     where
-        V2 xcenter _ = windowCenter
+        V2 xCenter _ = windowCenter
