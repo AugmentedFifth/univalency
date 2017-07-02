@@ -2,13 +2,16 @@
 
 ## a game about squares, types, and genesis
 
+---
+
 ### nerd shit
 
 **univalency** is written entirely in [Haskell](https://www.haskell.org/), using
 the [Helm](http://helm-engine.org/) game engine. Helm uses a style referred to
-as "functionally reactive programming" and is inspired directly by the Elm
-programming language (although Elm was certainly not the first to do so-called
-FRP).
+as "functionally reactive programming" (FRP) and is inspired directly by the
+[Elm programming language](http://elm-lang.org/) (although Elm was certainly not
+the first to do so-called FRP).
+
 [Elm's website gives perhaps the best explanation of FRP](https://guide.elm-lang.org/architecture/),
 *without* using 20 pages of LaTeX-heavy, dense, technical prose filled with
 strange sterile examples that don't seem to mean anything unless you've spent

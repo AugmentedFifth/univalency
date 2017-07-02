@@ -56,11 +56,21 @@ extra-package-dbs: []
 #
 # Override the architecture used by stack, especially useful on Windows
 # arch: i386
-# arch: x86_64
+arch: x86_64
 #
 # Extra directories used by stack for building
 # extra-include-dirs: [/path/to/dir]
 # extra-lib-dirs: [/path/to/dir]
 #
 # Allow a newer minor version of GHC than the snapshot specifies
-# compiler-check: newer-minor
+compiler-check: newer-minor
+
+# Rebuild a package when its GHC options change
+rebuild-ghc-options: true
+
+ghc-options:
+    # All packages
+    "*": "-fprint-unicode-syntax -Wall -O2 -threaded -rtsopts -with-rtsopts=-N"
+
+# Packages that ghc-options applies to
+apply-ghc-options: targets # All local packages that are targets
