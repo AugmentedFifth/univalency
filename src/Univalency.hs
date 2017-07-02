@@ -69,19 +69,19 @@ direction _             = error $ "Using a key that isn't "
                                 ++ " to move"
 
 squareColor :: Color
-squareColor = rgb 0.6 0 0.05
+squareColor = rgb 0.5 0 0.05
 
 squareForm :: Form e
-squareForm = outlined (solid squareColor) (square 120)
+squareForm = filled squareColor (square 120)
 
 playerImpetus :: Double
 playerImpetus = 0.03
 
 controlAcc :: Double
-controlAcc = 0.005
+controlAcc = 0.0075
 
 frictionalAcc :: Double
-frictionalAcc = 2e-5
+frictionalAcc = 1e-4
 
 playerMaxVel :: Double
 playerMaxVel = 0.5
@@ -205,7 +205,7 @@ update model DoNothing = (model, Cmd.none)
 
 subscriptions :: Sub SDLEngine Action
 subscriptions = Sub.batch
-    [ Time.fps 30 Animate
+    [ Time.fps 60 Animate
     , Keyboard.downs $
         \key -> if key `elem` movementKeys then StartMove key else DoNothing
     , Keyboard.ups $

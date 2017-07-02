@@ -4,6 +4,10 @@
 
 ---
 
+<h1 style="background-image: linear-gradient(45deg, rgba(67, 222, 166, 0.5), rgba(10, 98, 217, 0.5)); color: #79c; padding: 12px; font-weight: 900; text-shadow: 2px 2px 3px black; border-radius: 5px;">WORK IN PROGRESS: this is a non-functioning test</h1>
+
+---
+
 ### nerd shit
 
 **univalency** is written entirely in [Haskell](https://www.haskell.org/), using
