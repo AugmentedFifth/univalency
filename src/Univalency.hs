@@ -93,7 +93,7 @@ defaultText :: Text.Text
 defaultText = Text.Text
     { textString   = ""
     , textColor    = rgb 1 1 1
-    , textTypeface = "sans-serif"
+    , textTypeface = "monospace"
     , textHeight   = 14
     , textWeight   = Text.NormalWeight
     , textStyle    = Text.NormalStyle
@@ -101,6 +101,14 @@ defaultText = Text.Text
 
 toText :: String -> Text
 toText s = defaultText { textString = s }
+
+showV2 :: Show a => Int -> V2 a -> String
+showV2 padTo (V2 x y) = '(' : xPad ++ xStr ++ ", " ++ yPad ++ yStr ++ ")"
+    where
+        xStr = show x
+        xPad = replicate (padTo - length xStr) ' '
+        yStr = show y
+        yPad = replicate (padTo - length yStr) ' '
 
 setPos :: V2 Double -> Form e -> Form e
 setPos pos form@Form{..} = form { formPos = pos }
@@ -124,13 +132,12 @@ update model@Model{..} (Animate dt) =
         { playerPos    = newPos
         , playerVel    = newVel
         , playerAcc    = newAcc
-        , playerStatus = Waiting
         , debug = "pos: "
-               ++ show (round <$> newPos :: V2 Int)
+               ++ showV2 4 (round <$> newPos :: V2 Int)
                ++ "  ||  vel: "
-               ++ show ((round.(1000*)) <$> newVel :: V2 Int)
+               ++ showV2 5 ((round.(10000*)) <$> newVel :: V2 Int)
                ++ "  ||  acc: "
-               ++ show ((round.(1000*)) <$> newAcc :: V2 Int)
+               ++ showV2 3 ((round.(10000*)) <$> newAcc :: V2 Int)
         }
     , Cmd.none
     )
@@ -160,16 +167,24 @@ update model@Model{..} (Animate dt) =
                 _           -> newAcc'
 
 update model@Model{..} (StartMove key) =
-    ( model
-        { playerVel    = playerVel + playerImpetus *^ direction key
-        --, playerAcc    = playerAcc + controlAcc *^ direction
-        , playerStatus = newStatus
-        }
-    , Cmd.none
-    )
+    let updating =
+            case playerStatus of
+                Moving keys -> key `notElem` keys
+                _           -> True
+    in
+        if updating then
+            ( model
+                { playerVel    = playerVel + playerImpetus *^ direction key
+                , playerAcc    = playerAcc + controlAcc *^ direction key
+                , playerStatus = newStatus
+                }
+            , Cmd.none
+            )
+        else
+            (model, Cmd.none)
     where
         newStatus = case playerStatus of
-            Moving keys -> Moving $ keys `union` [key]
+            Moving keys -> Moving $ key : keys
             _           -> Moving [key]
 
 update model@Model{..} (StopMove key) =
