@@ -9,21 +9,22 @@ module Univalency
     ) where
 
 
-import           Data.List
+import           Data.List            hiding (group)
 
 import           Linear.Metric
-import           Linear.V2 (V2(V2))
-import           Linear.Vector hiding (unit)
+import           Linear.V2            (V2 (V2))
+import           Linear.Vector        hiding (unit)
 
 import           Helm
-import qualified Helm.Cmd as Cmd
+import qualified Helm.Cmd             as Cmd
 import           Helm.Color
-import           Helm.Engine.SDL (SDLEngine)
+import           Helm.Engine.SDL      (SDLEngine)
 import           Helm.Graphics2D
 import qualified Helm.Graphics2D.Text as Text
-import qualified Helm.Keyboard as Keyboard
-import qualified Helm.Sub as Sub
-import qualified Helm.Time as Time
+import qualified Helm.Keyboard        as Keyboard
+import qualified Helm.Mouse           as Mouse
+import qualified Helm.Sub             as Sub
+import qualified Helm.Time            as Time
 
 
 data Action
@@ -31,16 +32,22 @@ data Action
     | Animate Double
     | StartMove Keyboard.Key
     | StopMove Keyboard.Key
+    | MouseMove (V2 Int)
+    | MouseClick Mouse.MouseButton (V2 Int)
 
 data PlayerStatus
     = Moving [Keyboard.Key]
     | Waiting
+
+data ClickEffect = Active Int (V2 Int)
 
 data Model = Model
     { playerPos    :: V2 Double
     , playerVel    :: V2 Double
     , playerAcc    :: V2 Double
     , playerStatus :: PlayerStatus
+    , mousePos     :: V2 Double
+    , clickEffects :: [ClickEffect]
     , debug        :: String
     }
 
@@ -50,6 +57,11 @@ windowDims = V2 1024 768
 
 windowCenter :: V2 Double
 windowCenter = (fromIntegral.(`div` 2)) <$> windowDims
+
+centerForms :: V2 Double -> [Form e] -> Form e
+{-# INLINE centerForms #-}
+centerForms pos forms = toForm $ center pos
+                               $ collage forms
 
 movementKeys :: [Keyboard.Key]
 movementKeys =
@@ -83,11 +95,11 @@ controlAcc = 0.0075
 frictionalAcc :: Double
 frictionalAcc = 1e-4
 
-playerMaxVel :: Double
-playerMaxVel = 0.5
+playerMaxSqSpeed :: Double
+playerMaxSqSpeed = 0.375
 
 epsilon :: Double
-epsilon = 5e-7
+epsilon = 1e-8
 
 defaultText :: Text.Text
 defaultText = Text.Text
@@ -121,6 +133,8 @@ initial =
         , playerVel    = zero
         , playerAcc    = zero
         , playerStatus = Waiting
+        , mousePos     = zero
+        , clickEffects = []
         , debug        = ""
         }
     , Cmd.none
@@ -132,39 +146,41 @@ update model@Model{..} (Animate dt) =
         { playerPos    = newPos
         , playerVel    = newVel
         , playerAcc    = newAcc
-        , debug = "pos: "
-               ++ showV2 4 (round <$> newPos :: V2 Int)
-               ++ "  ||  vel: "
-               ++ showV2 5 ((round.(10000 *)) <$> newVel :: V2 Int)
-               ++ "  ||  acc: "
-               ++ showV2 3 ((round.(10000 *)) <$> newAcc :: V2 Int)
+        , clickEffects = clickEffects >>= decrementClickEffects
+        , debug        = "pos: "
+                      ++ showV2 4 (round <$> newPos :: V2 Int)
+                      ++ "  ||  vel: "
+                      ++ showV2 5 ((round.(10000 *)) <$> newVel :: V2 Int)
+                      ++ "  ||  acc: "
+                      ++ showV2 3 ((round.(10000 *)) <$> newAcc :: V2 Int)
         }
     , Cmd.none
     )
     where
-        updateSpeed vel acc
-            | signum newSpeed /= signum vel
-            , vel /= 0     = 0
-            | newSpeed > 0 = min newSpeed playerMaxVel
-            | otherwise    = max newSpeed (-playerMaxVel)
+        updateSpeed speed acc =
+            if signum newSpeed /= signum speed && speed /= 0 then
+                0
+            else
+                newSpeed
             where
-                newSpeed = acc * dt + vel
+                newSpeed = acc * dt + speed
 
         newPos = playerVel ^* dt + playerPos
         newVel' = liftI2 updateSpeed playerVel playerAcc
-        newVel =
-            if norm newVel' <= epsilon then
-                zero
-            else
-                newVel'
-        newAcc' = if norm newVel > 0 then
-                      (frictionalAcc * dt *^).negate.signorm $ newVel
-                  else
-                      zero
-        newAcc =
+        newSqSpeed = quadrance newVel'
+        newVel
+            | newSqSpeed <= epsilon         = zero
+            | newSqSpeed > playerMaxSqSpeed = sqrt playerMaxSqSpeed *^
+                                                  signorm newVel'
+            | otherwise                     = newVel'
+        newAcc = ((frictionalAcc * dt *^).negate.normalize) newVel +
             case playerStatus of
-                Moving keys -> controlAcc *^ sum (direction <$> keys) + newAcc'
-                _           -> newAcc'
+                Moving keys -> controlAcc *^ (signorm.sum) (direction <$> keys)
+                _           -> zero
+
+        decrementClickEffects (Active i pos)
+            | i > 0     = [Active (i - 1) pos]
+            | otherwise = []
 
 update model@Model{..} (StartMove key) =
     let updating =
@@ -197,6 +213,19 @@ update model@Model{..} (StopMove key) =
                                Moving $ delete key keys
             _           -> Waiting
 
+update model@Model{..} (MouseMove mousePos') =
+    (model { mousePos = fromIntegral <$> mousePos' }, Cmd.none)
+
+update model@Model{..} (MouseClick button clickPos) =
+    if button == Mouse.LeftButton then
+        (model { clickEffects = newClickEffects }, Cmd.none)
+    else
+        (model, Cmd.none)
+    where
+        samePos (Active _ pos) = pos /= clickPos
+        filteredClickEffects = filter samePos clickEffects
+        newClickEffects = Active 24 clickPos : filteredClickEffects
+
 update model DoNothing = (model, Cmd.none)
 
 subscriptions :: Sub SDLEngine Action
@@ -206,15 +235,23 @@ subscriptions = Sub.batch
           \key -> if key `elem` movementKeys then StartMove key else DoNothing
     , Keyboard.ups $
           \key -> if key `elem` movementKeys then StopMove key else DoNothing
+    , Mouse.moves MouseMove
+    , Mouse.downs MouseClick
     ]
 
 view :: Model -> Graphics SDLEngine
 view Model{..} = Graphics2D
     $ collage
-        [ toForm $ center (V2 xCenter 20)
-                 $ collage [text $ toText debug]
-        , toForm $ center windowCenter
-                 $ collage [setPos playerPos squareForm]
+        [ centerForms (V2 xCenter 20) [text $ toText debug]
+        , centerForms windowCenter [setPos playerPos squareForm]
+        , group $ clickEffectForm <$> clickEffects
         ]
     where
         V2 xCenter _ = windowCenter
+
+        clickEffectForm (Active i pos) =
+            let clickEffectAlpha = 5 / 4096 * fromIntegral (i ^ (2 :: Int))
+                clickEffectColor = rgba 0.75 0.75 1 clickEffectAlpha
+            in  setPos (fromIntegral <$> pos)
+              $ filled clickEffectColor
+              $ circle (24 - fromIntegral (i ^ (2 :: Int) `div` 24))
