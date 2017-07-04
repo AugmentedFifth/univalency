@@ -48,6 +48,12 @@ data Model = Model
     , playerAcc    :: V2 Double
     , playerAngle  :: Double
     , playerStatus :: PlayerStatus
+    , shadowPos    :: V2 Double
+    , shadowVel    :: V2 Double
+    , shadowAcc    :: V2 Double
+    , shadowAngle  :: Double
+    , shadowAngVel :: Double
+    , shadowAngAcc :: Double
     , mousePos     :: V2 Double
     , mouseDown    :: Bool
     , clickEffects :: [ClickEffect]
@@ -89,6 +95,25 @@ squareColor = rgb 0.5 0 0.05
 squareForm :: Form e
 squareForm = filled squareColor (square 120)
 
+tractorForm :: Form e
+tractorForm =
+    let origRect = gradient
+            (linear
+                (0, 60)
+                (60, 60)
+                [ (0, rgba 0.125  0.375 0.625 0.1875)
+                , (1, rgba 0.0625 0.5   0.375 0)
+                ]
+            )
+            (rect $ V2 60 120)
+    in  origRect { formPos = V2 90 0 }
+
+shadowForm :: Form e
+shadowForm = filled shadowColor (square 128)
+    where
+        Color r g b _ = squareColor
+        shadowColor = rgba (r - 0.25) (g + 0.125) (b + 0.0625) 0.375
+
 playerImpetus :: Double
 playerImpetus = 3e-2
 
@@ -106,6 +131,9 @@ minTurnVel = 0.015625
 
 turnVel :: Double
 turnVel = 0.01
+
+springConstant :: Double
+springConstant = 2e-4
 
 epsilon :: Double
 epsilon = 1e-8
@@ -134,6 +162,10 @@ showV2 padTo (V2 x y) = '(' : xPad ++ xStr ++ ", " ++ yPad ++ yStr ++ ")"
 setPos :: V2 Double -> Form e -> Form e
 setPos pos form@Form{..} = form { formPos = pos }
 
+normalizeAngle :: Double -> Double
+{-# INLINE normalizeAngle #-}
+normalizeAngle t = t - if abs t > pi then signum t * 2 * pi else 0
+
 
 initial :: (Model, Cmd SDLEngine Action)
 initial =
@@ -143,6 +175,12 @@ initial =
         , playerAcc    = zero
         , playerAngle  = 0
         , playerStatus = Waiting
+        , shadowPos    = zero
+        , shadowVel    = zero
+        , shadowAcc    = zero
+        , shadowAngle  = 0
+        , shadowAngVel = 0
+        , shadowAngAcc = 0
         , mousePos     = zero
         , mouseDown    = False
         , clickEffects = []
@@ -158,6 +196,12 @@ update model@Model{..} (Animate dt) =
         , playerVel    = newVel
         , playerAcc    = newAcc
         , playerAngle  = newAngle
+        , shadowPos    = newShadowPos
+        , shadowVel    = newShadowVel
+        , shadowAcc    = newShadowAcc
+        , shadowAngle  = newShadowAngle
+        , shadowAngVel = newShadowAngVel
+        , shadowAngAcc = newShadowAngAcc
         , clickEffects = clickEffects >>= decrementClickEffects
         , debug        =  "pos: "
                       ++ showV2 4 (round <$> newPos :: V2 Int)
@@ -194,22 +238,37 @@ update model@Model{..} (Animate dt) =
                 Moving keys -> controlAcc *^ (signorm.sum) (direction <$> keys)
                 _           -> zero
 
-        newAngle = playerAngle +
+        newAngle = normalizeAngle $ playerAngle +
             if not mouseDown then 0 else deltaAngle
             where
                 towardCursor@(V2 _ ty) = mousePos - (newPos + windowCenter)
                 V2 x _ = normalize towardCursor
                 destAngle = acos x * signum ty
-                angleDiff' = destAngle - playerAngle
-                angleDiff = angleDiff' -
-                    if abs angleDiff' > pi then
-                        signum angleDiff' * 2 * pi
-                    else
-                        0
+                angleDiff = normalizeAngle $ destAngle - playerAngle
                 deltaAngle = signum angleDiff
                            * min
                                (minTurnVel + abs angleDiff * turnVel * dt)
                                (abs angleDiff / 2)
+
+        newShadowAcc = ((frictionalAcc' * dt *^).negate.normalize) shadowVel +
+            (springConstant *^ displacement)
+            where
+                displacement = playerPos - shadowPos
+                frictionalAcc' = norm displacement * frictionalAcc / 24
+
+        newShadowVel = updateVel 1e12 shadowVel newShadowAcc
+
+        newShadowPos = newShadowVel ^* dt + shadowPos
+
+        newShadowAngAcc = ((frictionalAcc' * dt *).negate.signum) shadowAngVel +
+            (2 * springConstant * displacement)
+            where
+                displacement = normalizeAngle $ playerAngle - shadowAngle
+                frictionalAcc' = abs displacement * frictionalAcc / 12
+
+        newShadowAngVel = updateSpeed shadowAngVel newShadowAngAcc
+
+        newShadowAngle = normalizeAngle $ newShadowAngVel * dt + shadowAngle
 
         decrementClickEffects (Active i pos)
             | i > 0     = [Active (i - 1) pos]
@@ -290,7 +349,14 @@ view :: Model -> Graphics SDLEngine
 view Model{..} = Graphics2D
     $ collage
         [ centerForms (V2 xCenter 20) [text $ toText debug]
-        , centerForms windowCenter [rotate playerAngle.setPos playerPos $ squareForm]
+        , centerForms windowCenter
+              [ rotate shadowAngle.setPos shadowPos
+              $ shadowForm
+              ]
+        , centerForms windowCenter
+              [ rotate playerAngle.setPos playerPos
+              $ group (squareForm : maybeTractorForm)
+              ]
         , group $ clickEffectForm <$> clickEffects
         ]
     where
@@ -302,3 +368,5 @@ view Model{..} = Graphics2D
             in  setPos (fromIntegral <$> pos)
               $ filled clickEffectColor
               $ circle (24 - fromIntegral (i ^ (2 :: Int) `div` 24))
+
+        maybeTractorForm = [tractorForm | mouseDown]
