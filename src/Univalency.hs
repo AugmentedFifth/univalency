@@ -246,7 +246,8 @@ update model@Model{..} (Animate dt) =
 
         newAcc = ((frictionalAcc * dt *^).negate.normalize) newVel +
             case playerStatus of
-                Moving keys -> controlAcc *^ (signorm.sum) (direction <$> keys)
+                Moving keys -> controlAcc *^
+                                   (normalize.sum) (direction <$> keys)
                 _           -> zero
 
         newAngle = normalizeAngle $ playerAngle +
@@ -311,10 +312,8 @@ update model@Model{..} (StopMove key) =
     (model { playerStatus = newStatus }, Cmd.none)
     where
         newStatus = case playerStatus of
-            Moving keys -> if length keys < 2 then
-                               Waiting
-                           else
-                               Moving $ delete key keys
+            Moving keys -> let newKeys = delete key keys
+                           in  if null newKeys then Waiting else Moving newKeys
             _           -> Waiting
 
 update model@Model{..} (MouseMove mousePos') =
@@ -361,11 +360,11 @@ view Model{..} = Graphics2D
         [ centerForms (V2 xCenter 20) [text $ toText debug]
         , centerForms windowCenter
               [ rotate shadowAngle.setPos shadowPos
-              $ shadowForm
+                  $ shadowForm
               ]
         , centerForms windowCenter
               [ rotate playerAngle.setPos playerPos
-              $ group (squareForm : maybeTractorForm)
+                  $ group (squareForm : maybeTractorForm)
               ]
         , group $ clickEffectForm <$> clickEffects
         ]
