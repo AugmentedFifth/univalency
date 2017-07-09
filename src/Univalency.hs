@@ -57,6 +57,7 @@ data Model = Model
     , mousePos     :: V2 Double
     , mouseDown    :: Bool
     , clickEffects :: [ClickEffect]
+    , tractorLoop  :: Int
     , debug        :: String
     }
 
@@ -95,18 +96,26 @@ squareColor = rgb 0.5 0 0.05
 squareForm :: Form e
 squareForm = filled squareColor (square 120)
 
-tractorForm :: Form e
-tractorForm =
-    let origRect = gradient
-            (linear
-                (0, 60)
-                (60, 60)
-                [ (0, rgba 0.125  0.375 0.625 0.1875)
-                , (1, rgba 0.0625 0.5   0.375 0)
+tractorLoopPeriod :: Int
+tractorLoopPeriod = 90  -- Frames
+
+tractorForm :: Int -> Form e
+tractorForm i =
+    let semiperiod = tractorLoopPeriod `div` 2
+        stopPos =
+            fromIntegral (if i <= semiperiod then i else 2 * semiperiod - i) /
+                fromIntegral tractorLoopPeriod
+        origRect = gradient
+            ( linear
+                (-45, 60)
+                (90,  60)
+                [ (0,       rgba 0.125  0.375 0.625 0.1875)
+                , (stopPos, rgba 0.0625 0.5   0.375 0)
+                , (1,       rgba 0.0625 0.5   0.375 0)
                 ]
             )
-            (rect $ V2 60 120)
-    in  origRect { formPos = V2 90 0 }
+            (rect $ V2 90 120)
+    in  origRect { formPos = V2 105 0 }
 
 shadowForm :: Form e
 shadowForm = filled shadowColor (square 128)
@@ -184,6 +193,7 @@ initial =
         , mousePos     = zero
         , mouseDown    = False
         , clickEffects = []
+        , tractorLoop  = 0
         , debug        = ""
         }
     , Cmd.none
@@ -203,7 +213,8 @@ update model@Model{..} (Animate dt) =
         , shadowAngVel = newShadowAngVel
         , shadowAngAcc = newShadowAngAcc
         , clickEffects = clickEffects >>= decrementClickEffects
-        , debug        =  "pos: "
+        , tractorLoop  = (tractorLoop + 1) `mod` tractorLoopPeriod
+        , debug        = "pos: "
                       ++ showV2 4 (round <$> newPos :: V2 Int)
                       ++ "  ||  vel: "
                       ++ showV2 5 ((round.(10000 *)) <$> newVel :: V2 Int)
@@ -279,8 +290,7 @@ update model@Model{..} (StartMove key) =
             case playerStatus of
                 Moving keys -> key `notElem` keys
                 _           -> True
-    in
-        if updating then
+    in  if updating then
             ( model
                 { playerVel    = playerVel + playerImpetus *^ direction key
                 , playerAcc    = newAcc
@@ -369,4 +379,4 @@ view Model{..} = Graphics2D
               $ filled clickEffectColor
               $ circle (24 - fromIntegral (i ^ (2 :: Int) `div` 24))
 
-        maybeTractorForm = [tractorForm | mouseDown]
+        maybeTractorForm = [tractorForm tractorLoop | mouseDown]
